@@ -69,8 +69,16 @@ async function bridgeUsdcEvmToSolana(): Promise<void> {
 
   // The result contains steps with transaction info
   if (result.steps && result.steps.length > 0) {
+    const stepNames = [
+      "Approve USDC (if needed)",
+      "Burn USDC on Arbitrum",
+      "Wait for attestation",
+      "Mint USDC on Solana"
+    ];
+
     result.steps.forEach((step: any, index: number) => {
-      console.log(`\nStep ${index + 1}: ${step.type}`);
+      const stepName = stepNames[index] || `Step ${index + 1}`;
+      console.log(`\n${stepName}:`);
       if (step.txHash) {
         console.log(`  Transaction: ${step.txHash}`);
       }
