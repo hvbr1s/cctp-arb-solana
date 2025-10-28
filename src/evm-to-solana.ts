@@ -349,18 +349,13 @@ async function createSolanaReceiveMessageTx(
     payerKey: recipientPubkey,
     recentBlockhash: blockhash,
     instructions: instructions,
-  }).compileToV0Message(lookupTables);
+  }).compileToV0Message();
 
   const transaction = new VersionedTransaction(txMessage);
   const serializedTx = transaction.message.serialize();
   const base64EncodedData = Buffer.from(serializedTx).toString("base64");
 
   console.log(`Transaction size: ${serializedTx.length} bytes`);
-  if (altAddress) {
-    console.log(`Saved ~${lookupTables[0]?.state.addresses.length * 32} bytes with ALT\n`);
-  } else {
-    console.log();
-  }
 
   return base64EncodedData;
 }
