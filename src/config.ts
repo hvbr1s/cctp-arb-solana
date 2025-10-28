@@ -113,3 +113,4 @@ export const SOLANA_USDC_MINT = new PublicKey(
 export const ETHEREUM_DOMAIN = 0;
 export const ARBITRUM_DOMAIN = 3;
 export const SOLANA_DOMAIN = 5;
+export const SOLANA_RELAYER_PRIVATE_KEY = process.env.PHANTOM_PK || "";
