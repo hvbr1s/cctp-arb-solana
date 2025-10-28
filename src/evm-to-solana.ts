@@ -28,8 +28,15 @@ import {
   AddressLookupTableProgram,
   AddressLookupTableAccount,
 } from "@solana/web3.js";
+import { getAssociatedTokenAddress, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import bs58 from "bs58";
 import { MESSAGE_TRANSMITTER_PROGRAM_ID, TOKEN_MESSENGER_MINTER_PROGRAM_ID, SOLANA_USDC_MINT, SOLANA_DOMAIN, ARBITRUM_DOMAIN, TOKEN_MESSENGER, ARBITRUM_USDC  } from "./config";
+import {
+  getProgramsV2,
+  getReceiveMessagePdasV2,
+  decodeEventNonceFromMessageV2
+} from "../solana-cctp-contracts/examples/v2/utilsV2";
+import * as anchor from "@coral-xyz/anchor";
 
 /**
  * EVM to Solana CCTP Bridge with Fordefi
@@ -322,8 +329,7 @@ async function waitForAttestation(
 
 async function createSolanaReceiveMessageTx(
   message: string,
-  attestation: string,
-  altAddress?: string,
+  attestation: string
 ): Promise<string> {
   console.log("=== Step 3: Creating Solana receiveMessage Transaction ===\n");
 
@@ -335,13 +341,116 @@ async function createSolanaReceiveMessageTx(
     bridgeConfigSolana.solanaRecipientAddress,
   );
 
-  ////TODO --> build CCTp tx
+  // Initialize Anchor provider and programs
+  // Create a custom Anchor provider using our Solana RPC URL
+  const anchorProvider = new anchor.AnchorProvider(
+    connection,
+    { publicKey: recipientPubkey } as any, // Mock wallet - we only need it for reading data
+    { commitment: "confirmed" }
+  );
+  const { messageTransmitterProgram, tokenMessengerMinterProgram } =
+    getProgramsV2(anchorProvider);
+
+  const usdcAddress = SOLANA_USDC_MINT;
+  // Derive the ATA for the recipient's USDC account
+  const userTokenAccount = await getAssociatedTokenAddress(
+    usdcAddress,
+    recipientPubkey
+  );
+  const remoteTokenAddressHex = ARBITRUM_USDC;
+  const remoteDomain = ARBITRUM_DOMAIN.toString();
+  const messageHex = message;
+  const attestationHex = attestation;
+  const nonce = decodeEventNonceFromMessageV2(messageHex);
+
+  // Get PDAs
+  const pdas = await getReceiveMessagePdasV2(
+    { messageTransmitterProgram, tokenMessengerMinterProgram },
+    usdcAddress,
+    remoteTokenAddressHex,
+    remoteDomain,
+    nonce
+  );
+
+  // accountMetas list to pass to remainingAccounts
+  const accountMetas: any[] = [];
+  accountMetas.push({
+    isSigner: false,
+    isWritable: false,
+    pubkey: pdas.tokenMessengerAccount.publicKey,
+  });
+  accountMetas.push({
+    isSigner: false,
+    isWritable: false,
+    pubkey: pdas.remoteTokenMessengerKey.publicKey,
+  });
+  accountMetas.push({
+    isSigner: false,
+    isWritable: true,
+    pubkey: pdas.tokenMinterAccount.publicKey,
+  });
+  accountMetas.push({
+    isSigner: false,
+    isWritable: true,
+    pubkey: pdas.localToken.publicKey,
+  });
+  accountMetas.push({
+    isSigner: false,
+    isWritable: false,
+    pubkey: pdas.tokenPair.publicKey,
+  });
+  accountMetas.push({
+    isSigner: false,
+    isWritable: true,
+    pubkey: pdas.feeRecipientTokenAccount,
+  });
+  accountMetas.push({
+    isSigner: false,
+    isWritable: true,
+    pubkey: userTokenAccount,
+  });
+  accountMetas.push({
+    isSigner: false,
+    isWritable: true,
+    pubkey: pdas.custodyTokenAccount.publicKey,
+  });
+  accountMetas.push({
+    isSigner: false,
+    isWritable: false,
+    pubkey: TOKEN_PROGRAM_ID,
+  });
+  accountMetas.push({
+    isSigner: false,
+    isWritable: false,
+    pubkey: pdas.tokenMessengerEventAuthority.publicKey,
+  });
+  accountMetas.push({
+    isSigner: false,
+    isWritable: false,
+    pubkey: tokenMessengerMinterProgram.programId,
+  });
+
+  // Build the receiveMessage instruction using the Anchor program
+  const instructionBuilder = messageTransmitterProgram.methods
+    .receiveMessage({
+      message: Buffer.from(messageHex.replace("0x", ""), "hex"),
+      attestation: Buffer.from(attestationHex.replace("0x", ""), "hex"),
+    })
+    .accounts({
+      payer: recipientPubkey,
+      caller: recipientPubkey,
+      messageTransmitter: pdas.messageTransmitterAccount.publicKey,
+      usedNonce: pdas.usedNonce,
+      receiver: tokenMessengerMinterProgram.programId,
+    } as any)
+    .remainingAccounts(accountMetas);
+
+  const instruction = await instructionBuilder.instruction();
 
   // Get recent blockhash
   const { blockhash } = await connection.getLatestBlockhash();
 
-  // Create VersionedTransaction with ALT support
-  // If ATA needs to be created, add that instruction first
+  // Create VersionedTransaction with the instruction
   const instructions: TransactionInstruction[] = [];
   instructions.push(instruction);
 
@@ -409,8 +518,7 @@ async function main(): Promise<void> {
     const { attestation } = await waitForAttestation(txHash);
     const base64SerializedTx = await createSolanaReceiveMessageTx(
       message,
-      attestation,
-      bridgeConfigSolana.altAddress
+      attestation
     );
     await submitToFordefiApi(base64SerializedTx);
 
