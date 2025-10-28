@@ -60,7 +60,11 @@ async function bridgeUsdcEvmToSolana(): Promise<void> {
   // Execute the full bridge (burn + attestation + mint)
   const result = await kit.bridge({
     from: { adapter: viemAdapter, chain: "Arbitrum" },
-    to: { adapter: solanaAdapter, chain: "Solana" },
+    to: {
+      adapter: solanaAdapter,
+      chain: "Solana",
+      recipientAddress: bridgeConfigSolana.solanaRecipientAddress // Explicitly set recipient
+    },
     amount: bridgeConfigSolana.amountUsdc,
   });
 
