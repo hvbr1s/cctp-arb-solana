@@ -340,28 +340,9 @@ async function createSolanaReceiveMessageTx(
   // Get recent blockhash
   const { blockhash } = await connection.getLatestBlockhash();
 
-  // Fetch ALT if provided
-  let lookupTables: AddressLookupTableAccount[] = [];
-  if (altAddress) {
-    console.log(`Using ALT: ${altAddress}`);
-    const altAccount = await connection.getAddressLookupTable(
-      new PublicKey(altAddress)
-    );
-    if (altAccount.value) {
-      lookupTables = [altAccount.value];
-      console.log(`ALT loaded with ${altAccount.value.state.addresses.length} addresses`);
-    } else {
-      console.warn(`Warning: ALT ${altAddress} not found, proceeding without it`);
-    }
-  }
-
   // Create VersionedTransaction with ALT support
   // If ATA needs to be created, add that instruction first
   const instructions: TransactionInstruction[] = [];
-  if (createAtaInstruction) {
-    instructions.push(createAtaInstruction);
-    console.log("✓ Added create ATA instruction to transaction");
-  }
   instructions.push(instruction);
 
   const txMessage = new TransactionMessage({
