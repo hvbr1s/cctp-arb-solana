@@ -109,7 +109,7 @@ async function bridgeUsdcEvmToSolana(): Promise<void> {
 
   // Create EVM adapter using Fordefi provider
   const viemAdapter = await createAdapterFromProvider({
-    provider: fordefiProvider as any, // Fordefi provider is EIP1193-compatible
+    provider: fordefiProvider as any,
   });
 
   // Create Solana adapter from private key
@@ -123,13 +123,12 @@ async function bridgeUsdcEvmToSolana(): Promise<void> {
   console.log("2. Wait for Circle attestation");
   console.log("3. Mint USDC on Solana\n");
 
-  // Execute the full bridge (burn + attestation + mint)
   const result = await kit.bridge({
     from: { adapter: viemAdapter, chain: "Arbitrum" },
     to: {
       adapter: solanaAdapter,
       chain: "Solana",
-      recipientAddress: bridgeConfigSolana.solanaRecipientAddress // Explicitly set recipient
+      recipientAddress: bridgeConfigSolana.solanaRecipientAddress 
     },
     amount: bridgeConfigSolana.amountUsdc,
   });
@@ -139,7 +138,6 @@ async function bridgeUsdcEvmToSolana(): Promise<void> {
   console.log(`Amount: ${result.amount} ${result.token}`);
   console.log("\nTransaction details:");
 
-  // The result contains steps with transaction info
   if (result.steps && result.steps.length > 0) {
     const stepNames = [
       "Approve USDC (if needed)",
@@ -164,8 +162,6 @@ async function bridgeUsdcEvmToSolana(): Promise<void> {
       }
     });
   }
-
-  // Check if bridge actually completed successfully
   if (result.state === 'pending') {
     console.log("\n⚠️  Warning: Bridge is still pending. The mint on Solana may not have completed.");
     console.log("You may need to manually complete the transfer or retry.");
